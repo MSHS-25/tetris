@@ -3,27 +3,20 @@ using TMPro;
 
 public class Scoreboard : MonoBehaviour
 {
+    private const string LastScoreKey = "LastScore";
+
+    // Points for clearing 0-4 lines at once
+    private static readonly int[] ScorePerLine = { 0, 100, 300, 500, 800 };
+
     public int score { get; private set; }
     public int linesCleared { get; private set; }
     public int piecesPlaced { get; private set; }
 
-    private int[] scorePerLine = { 0, 100, 300, 500, 800 };
-
-    private int miniTSpinScore = 100;
-    private int miniTSpinSingleScore = 200;
-    private int tSpinScore = 400;
-    private int tSpinDoubleScore = 1200;
-
-    private float backToBackBonus = 1.5f;
-
-    private int softDropPointsPerLine = 1;
-    private int hardDropPointsPerLine = 2;
-
-    public TextMeshProUGUI scoreText; // UI element to display the score
+    public TextMeshProUGUI scoreText;
 
     private void Start()
     {
-        UpdateScoreUI(); // Update the UI at the start
+        UpdateScoreUI();
     }
 
     public void ResetScore()
@@ -31,85 +24,50 @@ public class Scoreboard : MonoBehaviour
         score = 0;
         linesCleared = 0;
         piecesPlaced = 0;
-        UpdateScoreUI(); // Update the UI after resetting
+        UpdateScoreUI();
     }
 
-    public void AddScore(int lines, bool isTSpin = false, bool isMiniTSpin = false, bool isBackToBack = false, bool isHardDrop = false, bool isSoftDrop = false)
+    // Awards points for a line clear of 1-4 lines
+    public void AddLineClear(int lines)
     {
-        int baseScore = 0;
-
-        // Determine base score based on lines cleared
-        if (lines >= 1 && lines <= 4)
+        if (lines < 1 || lines >= ScorePerLine.Length)
         {
-            baseScore = scorePerLine[lines];
+            return;
         }
 
-        // Handle T-Spins
-        if (isTSpin)
-        {
-            baseScore = tSpinScore;
-            if (lines == 1)
-            {
-                baseScore = isBackToBack ? tSpinDoubleScore : tSpinScore;
-            }
-        }
-        else if (isMiniTSpin)
-        {
-            baseScore = miniTSpinScore;
-            if (lines == 1)
-            {
-                baseScore = miniTSpinSingleScore;
-            }
-        }
-
-        // Apply back-to-back bonus
-        if (isBackToBack)
-        {
-            baseScore = Mathf.FloorToInt(baseScore * backToBackBonus);
-        }
-
-        // Add points for drops
-        if (isSoftDrop)
-        {
-            baseScore += softDropPointsPerLine * lines;
-        }
-        if (isHardDrop)
-        {
-            baseScore += hardDropPointsPerLine * lines;
-        }
-
-        // Update score and lines cleared
-        score += baseScore;  // Removed level multiplication
+        score += ScorePerLine[lines];
         linesCleared += lines;
-        piecesPlaced++;
+        UpdateScoreUI();
+    }
 
-        UpdateScoreUI(); // Update the UI with the new score
+    // Awards points for cells dropped by the player (1 per soft drop cell, 2 per hard drop cell)
+    public void AddDropPoints(int points)
+    {
+        score += points;
+        UpdateScoreUI();
     }
 
     public void PieceLocked()
     {
         piecesPlaced++;
-        UpdateScoreUI(); // Update the UI when a piece is locked
-    }
-
-    private void UpdateScoreUI()
-    {
-        // Update the score display in the UI
-        if (scoreText != null)
-        {
-            scoreText.text = $"Score: {score}";
-        }
     }
 
     public void SaveScoreOnGameOver()
     {
-        // Sla de score op bij game over
-        PlayerPrefs.SetInt("LastScore", score);  // Gebruik de juiste scorevariabele
+        PlayerPrefs.SetInt(LastScoreKey, score);
         PlayerPrefs.Save();
     }
 
     public int GetScore()
     {
-        return score; // Return the current score
+        return score;
+    }
+
+    private void UpdateScoreUI()
+    {
+        if (scoreText != null)
+        {
+            scoreText.text = $"Score: {score}";
+        }
     }
 }

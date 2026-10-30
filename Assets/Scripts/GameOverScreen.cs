@@ -4,30 +4,22 @@ using UnityEngine.SceneManagement;
 
 public class GameOverScreen : MonoBehaviour
 {
-    public TextMeshProUGUI finalScoreText;  // UI Text for the score and level
-    private Scoreboard scoreboard;
+    public TextMeshProUGUI finalScoreText;
 
-    private void Start()
-    {
-        scoreboard = FindObjectOfType<Scoreboard>(); // Find the Scoreboard script in the scene
-    }
-
-    // Method to restart the game
     public void RestartGame()
     {
-        Time.timeScale = 1f;
-        SceneManager.LoadScene("Tetris");  // Make sure the correct scene is loaded
+        Time.timeScale = 1f; // the game over screen paused the game
+        SceneManager.LoadScene("Tetris");
     }
 
-    // Method to go to the main menu
     public void GoToMainMenu()
     {
-        SceneManager.LoadScene("MainMenu");  // Make sure the name of your main menu scene is correct
+        Time.timeScale = 1f;
+        SceneManager.LoadScene("MainMenu");
     }
 
     public void UpdateFinalScore(int score)
     {
-        // Display the final score in the UI
-        finalScoreText.text = "Final Score: " + score.ToString();
+        finalScoreText.text = $"Final Score: {score}";
     }
 }

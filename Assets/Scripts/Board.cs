@@ -1,31 +1,27 @@
 ﻿using UnityEngine;
 using UnityEngine.Tilemaps;
 using UnityEngine.SceneManagement;
-using System.Collections;
 
 [DefaultExecutionOrder(-1)]
-public class Board : MonoBehaviour // All variables are defined above
+public class Board : MonoBehaviour
 {
-    private AudioSource audioSource;
-
     public AudioClip lockSound;
     public AudioClip lineClearSound;
     public AudioClip gameOverSound;
     public AudioClip rotateSound;
     public AudioClip mainThemeMusic;
 
-    public Tilemap tilemap { get; private set; }
-    public Piece activePiece { get; private set; }
-
     public TetrominoData[] tetrominoes;
     public Vector2Int boardSize = new Vector2Int(10, 20);
     public Vector3Int spawnPosition = new Vector3Int(-1, 8, 0);
     public Scoreboard scoreboard;
     public GameObject gameOverCanvas;
-    private bool isGameOver = false;
-    public float stepDelay = 1f;
-    public float moveDelay = 0.1f;
-    public float lockDelay = 0.5f;
+
+    public Tilemap tilemap { get; private set; }
+    public Piece activePiece { get; private set; }
+
+    private AudioSource audioSource;
+    private bool isGameOver;
 
     public RectInt Bounds
     {
@@ -38,14 +34,12 @@ public class Board : MonoBehaviour // All variables are defined above
 
     private void Awake()
     {
-        // Initialize components and music
         tilemap = GetComponentInChildren<Tilemap>();
         activePiece = GetComponentInChildren<Piece>();
         audioSource = GetComponent<AudioSource>();
 
-        PlayBackgroundMusic(); // Start background music
+        PlayBackgroundMusic();
 
-        // Initialize Tetrominoes
         for (int i = 0; i < tetrominoes.Length; i++)
         {
             tetrominoes[i].Initialize();
@@ -54,125 +48,102 @@ public class Board : MonoBehaviour // All variables are defined above
 
     private void Start()
     {
-        // Spawn the first piece when the game starts
         SpawnPiece();
     }
 
     public void SpawnPiece()
     {
-        // Randomly select a tetromino and spawn it at the specified position
-        int random = Random.Range(0, tetrominoes.Length);
-        TetrominoData data = tetrominoes[random];
+        TetrominoData data = tetrominoes[Random.Range(0, tetrominoes.Length)];
 
         activePiece.Initialize(this, spawnPosition, data);
 
         if (IsValidPosition(activePiece, spawnPosition))
         {
-            Set(activePiece); // Set the piece on the board
+            Set(activePiece);
         }
         else
         {
-            GameOver(); // End the game 
+            GameOver();
         }
     }
 
-    public bool IsGameOver() => isGameOver; // Return game over state
+    public bool IsGameOver() => isGameOver;
 
     public void GameOver()
     {
-        tilemap.ClearAllTiles(); // Clear all tiles when the game is over
-        StopBackgroundMusic(); // Stop the background music
+        isGameOver = true;
+        tilemap.ClearAllTiles();
+        StopBackgroundMusic();
+        PlaySound(gameOverSound);
 
-        if (gameOverCanvas != null)
-        {
-            gameOverCanvas.SetActive(true); // Show game over screen
-            SaveScoreAndUpdateUI(); // Save and display final score
-        }
-
-        Time.timeScale = 0f; // Pause the game
-        isGameOver = true; // Set the game over flag
-
-        StartCoroutine(WaitForSoundAndResumeGame()); // Wait for the game over sound to finish before resuming
-    }
-
-    private void SaveScoreAndUpdateUI()
-    {
-        // Save the score and update the UI with the final score
         if (scoreboard != null)
         {
             scoreboard.SaveScoreOnGameOver();
         }
 
-        int finalScore = scoreboard.GetScore();
-
-        GameOverScreen gameOverScreen = gameOverCanvas.GetComponent<GameOverScreen>();
-        if (gameOverScreen != null)
+        if (gameOverCanvas != null)
         {
-            gameOverScreen.UpdateFinalScore(finalScore);
-        }
-    }
+            gameOverCanvas.SetActive(true);
 
-    private IEnumerator WaitForSoundAndResumeGame()
-    {
-        // Play the game over sound and wait for it to finish
-        if (gameOverSound != null && audioSource != null)
-        {
-            audioSource.PlayOneShot(gameOverSound);
+            GameOverScreen gameOverScreen = gameOverCanvas.GetComponent<GameOverScreen>();
+            if (gameOverScreen != null && scoreboard != null)
+            {
+                gameOverScreen.UpdateFinalScore(scoreboard.GetScore());
+            }
         }
 
-        yield return new WaitForSeconds(gameOverSound.length); // Wait until sound finishes
+        Time.timeScale = 0f; // pause the game; the game over sound still plays
     }
 
     public void RestartGame()
     {
-        // Restart the game, resetting the board and score
         tilemap.ClearAllTiles();
         scoreboard.ResetScore();
+        ResumeGame();
+    }
+
+    public void ResumeGame()
+    {
+        if (gameOverCanvas != null)
+        {
+            gameOverCanvas.SetActive(false);
+        }
+
+        Time.timeScale = 1f;
+        isGameOver = false;
         SpawnPiece();
+        PlayBackgroundMusic();
     }
 
     public void GoToMainMenu()
     {
-        // Go back to the main menu
+        Time.timeScale = 1f;
         SceneManager.LoadScene("MainMenu");
     }
 
     public void Set(Piece piece)
     {
-        // Set the piece on the board
-        SetOrClearTiles(piece, true);
+        SetOrClearTiles(piece, piece.data.tile);
     }
 
     public void Clear(Piece piece)
     {
-        // Clear the piece from the board
-        SetOrClearTiles(piece, false);
+        SetOrClearTiles(piece, null);
     }
 
-    private void SetOrClearTiles(Piece piece, bool set)
+    private void SetOrClearTiles(Piece piece, TileBase tile)
     {
-        // Set or clear tiles for the piece based on the flag
         for (int i = 0; i < piece.cells.Length; i++)
         {
-            Vector3Int tilePosition = piece.cells[i] + piece.position;
-
-            if (set)
-            {
-                tilemap.SetTile(tilePosition, piece.data.tile);
-            }
-            else
-            {
-                tilemap.SetTile(tilePosition, null);
-            }
+            tilemap.SetTile(piece.cells[i] + piece.position, tile);
         }
     }
 
     public bool IsValidPosition(Piece piece, Vector3Int position)
     {
-        // Check if the piece can be placed at the given position
         RectInt bounds = Bounds;
 
-        foreach (var cell in piece.cells)
+        foreach (Vector3Int cell in piece.cells)
         {
             Vector3Int tilePosition = cell + position;
 
@@ -185,18 +156,18 @@ public class Board : MonoBehaviour // All variables are defined above
         return true;
     }
 
-    public void ClearLines()
+    // Clears every full row, awards points and returns the number of rows cleared
+    public int ClearLines()
     {
-        // Clear full lines and update the score
-        int lines = 0;
         RectInt bounds = Bounds;
+        int lines = 0;
         int row = bounds.yMin;
 
         while (row < bounds.yMax)
         {
             if (IsLineFull(row))
             {
-                LineClear(row); // Clear the line
+                LineClear(row); // rows above shift down, so check the same row again
                 lines++;
             }
             else
@@ -207,30 +178,24 @@ public class Board : MonoBehaviour // All variables are defined above
 
         if (lines > 0)
         {
-            PlayLineClearSound(); // Play sound when clearing lines
-            scoreboard.AddScore(lines, false, false, false, false, false); // Update score
-        }
-    }
+            PlaySound(lineClearSound);
 
-    private void PlayLineClearSound()
-    {
-        // Play the line clear sound
-        if (lineClearSound != null && audioSource != null)
-        {
-            audioSource.PlayOneShot(lineClearSound);
+            if (scoreboard != null)
+            {
+                scoreboard.AddLineClear(lines);
+            }
         }
+
+        return lines;
     }
 
     public bool IsLineFull(int row)
     {
-        // Check if the row is completely filled
         RectInt bounds = Bounds;
 
         for (int col = bounds.xMin; col < bounds.xMax; col++)
         {
-            Vector3Int position = new Vector3Int(col, row, 0);
-
-            if (!tilemap.HasTile(position))
+            if (!tilemap.HasTile(new Vector3Int(col, row, 0)))
             {
                 return false;
             }
@@ -241,13 +206,11 @@ public class Board : MonoBehaviour // All variables are defined above
 
     public void LineClear(int row)
     {
-        // Clear the specified line and move the rest down
         RectInt bounds = Bounds;
 
         for (int col = bounds.xMin; col < bounds.xMax; col++)
         {
-            Vector3Int position = new Vector3Int(col, row, 0);
-            tilemap.SetTile(position, null);
+            tilemap.SetTile(new Vector3Int(col, row, 0), null);
         }
 
         MoveLinesDown(row);
@@ -255,45 +218,27 @@ public class Board : MonoBehaviour // All variables are defined above
 
     private void MoveLinesDown(int row)
     {
-        // Move all lines down after clearing a line
         RectInt bounds = Bounds;
 
-        while (row < bounds.yMax)
+        for (; row < bounds.yMax; row++)
         {
             for (int col = bounds.xMin; col < bounds.xMax; col++)
             {
-                Vector3Int position = new Vector3Int(col, row + 1, 0);
-                TileBase above = tilemap.GetTile(position);
-
-                position = new Vector3Int(col, row, 0);
-                tilemap.SetTile(position, above);
+                TileBase above = tilemap.GetTile(new Vector3Int(col, row + 1, 0));
+                tilemap.SetTile(new Vector3Int(col, row, 0), above);
             }
-
-            row++;
         }
     }
 
-    public void ResumeGame()
+    public void PlaySound(AudioClip clip)
     {
-        // Resume the game after game over
-        if (gameOverCanvas != null)
+        if (clip != null && audioSource != null)
         {
-            gameOverCanvas.SetActive(false);
-            Time.timeScale = 1f;
+            audioSource.PlayOneShot(clip);
         }
-
-        isGameOver = false;
-        SpawnPiece();
-
-        PlayBackgroundMusic();
     }
 
-    public AudioSource GetAudioSource() // Get the audio
-    {
-        return audioSource;
-    }
-
-    private void PlayBackgroundMusic() // Play the theme
+    private void PlayBackgroundMusic()
     {
         if (mainThemeMusic != null && audioSource != null)
         {
@@ -308,13 +253,6 @@ public class Board : MonoBehaviour // All variables are defined above
         if (audioSource != null)
         {
             audioSource.Stop();
-        }
-    }
-
-    private void Update()
-    {
-        if (!isGameOver)
-        {
         }
     }
 }

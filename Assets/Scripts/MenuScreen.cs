@@ -1,26 +1,22 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI; 
+using UnityEngine.UI;
 
 public class MenuScreen : MonoBehaviour
 {
-    private AudioSource audioSource;
     public AudioClip mainThemeMusic;
-    public Button quitButton; // Verwijzing naar de Quit Button
+    public Button quitButton;
+
+    private AudioSource audioSource;
 
     private void Awake()
     {
         audioSource = GetComponent<AudioSource>();
+        PlayBackgroundMusic();
 
-        if (mainThemeMusic != null)
-        {
-            PlayBackgroundMusic();
-        }
-
-        // Voeg de functie voor de quit-knop toe
         if (quitButton != null)
         {
-            quitButton.onClick.AddListener(ExitGame);  // Wanneer de knop wordt ingedrukt, wordt ExitGame aangeroepen
+            quitButton.onClick.AddListener(ExitGame);
         }
     }
 
@@ -30,15 +26,14 @@ public class MenuScreen : MonoBehaviour
         SceneManager.LoadSceneAsync("Tetris");
     }
 
-        public void ExitGame()
-        {
-    #if UNITY_EDITOR
-            UnityEditor.EditorApplication.isPlaying = false;
-    #else
-            Application.Quit();
-    #endif
-        }
-
+    public void ExitGame()
+    {
+#if UNITY_EDITOR
+        UnityEditor.EditorApplication.isPlaying = false;
+#else
+        Application.Quit();
+#endif
+    }
 
     private void PlayBackgroundMusic()
     {

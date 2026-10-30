@@ -1,11 +1,12 @@
 using System.Collections.Generic;
 using UnityEngine;
 
+// Cell layouts and SRS wall kick tables for each tetromino, taken from the Tetris wiki.
 public static class Data
 {
-    public static readonly float cos = Mathf.Cos(Mathf.PI / 2f);
-    public static readonly float sin = Mathf.Sin(Mathf.PI / 2f);
-    public static readonly float[] RotationMatrix = new float[] { cos, sin, -sin, cos };
+    // 90 degree rotation matrix (cos 90 = 0, sin 90 = 1), stored as exact values
+    // so rounding in Piece.ApplyRotationMatrix never drifts
+    public static readonly float[] RotationMatrix = { 0f, 1f, -1f, 0f };
 
     public static readonly Dictionary<Tetromino, Vector2Int[]> Cells = new Dictionary<Tetromino, Vector2Int[]>()
     {
@@ -50,7 +51,4 @@ public static class Data
         { Tetromino.T, WallKicksJLOSTZ },
         { Tetromino.Z, WallKicksJLOSTZ },
     };
-
 }
-// dit zijn allemaal coordinaten die ik gratis kan vinden op de fanpage van tetris
-// ik krijg dan alle informatie en coordinaten via de vector methodes en pas het toe in mijn piece maar ook rotate

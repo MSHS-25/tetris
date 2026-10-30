@@ -14,7 +14,6 @@ public class LevelUpScreen : MonoBehaviour
         int currentLevel = PlayerPrefs.GetInt("SelectedLevel", 1);
         int currentScore = PlayerPrefs.GetInt("CurrentScore", 0);
 
-        // Toon het huidige niveau en score in de LevelUpScreen
         levelText.text = $"Level {currentLevel}";
         scoreText.text = $"Score: {currentScore}";
 
@@ -23,7 +22,7 @@ public class LevelUpScreen : MonoBehaviour
 
     private void OnResumeClick()
     {
-        // Als je verder gaat, ga terug naar het Tetris-spel
+        // Continue playing: back to the Tetris scene
         SceneManager.LoadScene("Tetris");
     }
 }

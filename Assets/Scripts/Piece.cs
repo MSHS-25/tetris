@@ -2,6 +2,9 @@
 
 public class Piece : MonoBehaviour
 {
+    private const int SoftDropPointsPerCell = 1;
+    private const int HardDropPointsPerCell = 2;
+
     public Board board { get; private set; }
     public TetrominoData data { get; private set; }
     public Vector3Int[] cells { get; private set; }
@@ -11,12 +14,11 @@ public class Piece : MonoBehaviour
     public float stepDelay = 1f;
     public float moveDelay = 0.1f;
     public float lockDelay = 0.5f;
+    public ParticleSystem landEffect;
 
     private float stepTime;
     private float moveTime;
     private float lockTime;
-    public ParticleSystem landEffect;
-    private AudioSource lockAudioSource;
 
     public void Initialize(Board board, Vector3Int position, TetrominoData data)
     {
@@ -42,19 +44,16 @@ public class Piece : MonoBehaviour
 
     private void Update()
     {
-
         if (board.IsGameOver())
         {
-            return;  
+            return;
         }
 
         board.Clear(this);
 
-        // We use a timer to allow the player to make adjustments to the piece
-        // before it locks in place
+        // The lock timer gives the player time to adjust the piece before it locks
         lockTime += Time.deltaTime;
 
-        // Handle rotation
         if (Input.GetKeyDown(KeyCode.Q))
         {
             Rotate(-1);
@@ -64,23 +63,26 @@ public class Piece : MonoBehaviour
             Rotate(1);
         }
 
-        // Handle hard drop
         if (Input.GetKeyDown(KeyCode.Space))
         {
             HardDrop();
+            return; // a new piece has spawned; nothing left to do for this one
         }
 
-        // Allow the player to hold movement keys but only after a move delay
-        // so it does not move too fast
+        // Held keys only repeat after the move delay so the piece does not move too fast
         if (Time.time > moveTime)
         {
             HandleMoveInputs();
         }
 
-        // Advance the piece to the next row every x seconds
         if (Time.time > stepTime)
         {
             Step();
+
+            if (board.IsGameOver())
+            {
+                return;
+            }
         }
 
         board.Set(this);
@@ -88,17 +90,15 @@ public class Piece : MonoBehaviour
 
     private void HandleMoveInputs()
     {
-        // Soft drop movement
         if (Input.GetKey(KeyCode.S))
         {
             if (Move(Vector2Int.down))
             {
-                // Update the step time to prevent double movement
-                stepTime = Time.time + stepDelay;
+                board.scoreboard?.AddDropPoints(SoftDropPointsPerCell);
+                stepTime = Time.time + stepDelay; // avoid a double move this frame
             }
         }
 
-        // Left/right movement
         if (Input.GetKey(KeyCode.A))
         {
             Move(Vector2Int.left);
@@ -113,10 +113,9 @@ public class Piece : MonoBehaviour
     {
         stepTime = Time.time + stepDelay;
 
-        // Step down to the next row
         Move(Vector2Int.down);
 
-        // Once the piece has been inactive for too long it becomes locked
+        // Once the piece has been inactive for too long it locks
         if (lockTime >= lockDelay)
         {
             Lock();
@@ -125,81 +124,60 @@ public class Piece : MonoBehaviour
 
     private void HardDrop()
     {
+        int cellsDropped = 0;
+
         while (Move(Vector2Int.down))
         {
-            continue;
+            cellsDropped++;
         }
 
+        board.scoreboard?.AddDropPoints(cellsDropped * HardDropPointsPerCell);
         Lock();
     }
 
     public void Lock()
     {
-        AudioSource audioSource = board.GetAudioSource();  // Get the audio source from the board
-        if (audioSource != null && board.lockSound != null)
-        {
-            audioSource.PlayOneShot(board.lockSound);
-        }
+        board.PlaySound(board.lockSound);
 
         if (landEffect != null)
         {
-            landEffect.Play(); 
+            landEffect.Play();
         }
 
-        board.Set(this);  
-        board.ClearLines();  
-
-
-        if (board.scoreboard != null) // get the score
-        {
-            // Geef de score aan voor Hard Drop of Soft Drop
-            bool isHardDrop = Input.GetKey(KeyCode.Space); // hard drop 
-            bool isSoftDrop = Input.GetKey(KeyCode.S);     // soft drop 
-            board.scoreboard.AddScore(1, isHardDrop: isHardDrop, isSoftDrop: isSoftDrop, isBackToBack: false);
-        }
-
-        board.SpawnPiece();  //new piece
+        board.Set(this);
+        board.ClearLines();
+        board.scoreboard?.PieceLocked();
+        board.SpawnPiece();
     }
-
 
     private bool Move(Vector2Int translation)
     {
-        Vector3Int newPosition = position;
-        newPosition.x += translation.x;
-        newPosition.y += translation.y;
+        Vector3Int newPosition = position + (Vector3Int)translation;
 
-        bool valid = board.IsValidPosition(this, newPosition);
-
-        // Only save the movement if the new position is valid
-        if (valid)
+        if (!board.IsValidPosition(this, newPosition))
         {
-            position = newPosition;
-            moveTime = Time.time + moveDelay;
-            lockTime = 0f; // reset
+            return false;
         }
 
-        return valid;
+        position = newPosition;
+        moveTime = Time.time + moveDelay;
+        lockTime = 0f;
+        return true;
     }
 
     private void Rotate(int direction)
     {
-        // Store the current rotation in case the rotation fails
-        // and we need to revert
+        // Remember the rotation so it can be reverted if every wall kick fails
         int originalRotation = rotationIndex;
 
-        // Play rotate sound
-        AudioSource audioSource = board.GetAudioSource();  // Get the audio source from board.cs
-        if (audioSource != null && board.rotateSound != null)
-        {
-            audioSource.PlayOneShot(board.rotateSound); // Play the rotation sound
-        }
-
-        // Rotate all of the cells using a rotation matrix
         rotationIndex = Wrap(rotationIndex + direction, 0, 4);
         ApplyRotationMatrix(direction);
 
-        // Revert the rotation if the wall kick tests fail
-        if (!TestWallKicks(rotationIndex, direction))
+        if (TestWallKicks(rotationIndex, direction))
+        {
+            board.PlaySound(board.rotateSound);
+        }
+        else
         {
             rotationIndex = originalRotation;
             ApplyRotationMatrix(-direction);
@@ -210,18 +188,16 @@ public class Piece : MonoBehaviour
     {
         float[] matrix = Data.RotationMatrix;
 
-        // Rotate all of the cells using the rotation matrix
         for (int i = 0; i < cells.Length; i++)
         {
             Vector3 cell = cells[i];
-
             int x, y;
 
             switch (data.tetromino)
             {
                 case Tetromino.I:
                 case Tetromino.O:
-                    // "I" and "O" are rotated from an offset center point
+                    // "I" and "O" rotate around an offset center point
                     cell.x -= 0.5f;
                     cell.y -= 0.5f;
                     x = Mathf.CeilToInt((cell.x * matrix[0] * direction) + (cell.y * matrix[1] * direction));
@@ -238,23 +214,23 @@ public class Piece : MonoBehaviour
         }
     }
 
-    private bool TestWallKicks(int rotationIndex, int rotationDirection) // wallkicks to prevent glitches or piece from going against or beyond the wall
+    // Tries each wall kick offset so a rotation near a wall or stack can still succeed
+    private bool TestWallKicks(int rotationIndex, int rotationDirection)
     {
         int wallKickIndex = GetWallKickIndex(rotationIndex, rotationDirection);
 
         for (int i = 0; i < data.wallKicks.GetLength(1); i++)
         {
-            Vector2Int translation = data.wallKicks[wallKickIndex, i];
-
-            if (Move(translation))
+            if (Move(data.wallKicks[wallKickIndex, i]))
             {
                 return true;
             }
         }
+
         return false;
     }
 
-    private int GetWallKickIndex(int rotationIndex, int rotationDirection) // rotation index so there aren't any bugs when rotating the piece
+    private int GetWallKickIndex(int rotationIndex, int rotationDirection)
     {
         int wallKickIndex = rotationIndex * 2;
 
@@ -272,9 +248,7 @@ public class Piece : MonoBehaviour
         {
             return max - (min - input) % (max - min);
         }
-        else
-        {
-            return min + (input - min) % (max - min);
-        }
+
+        return min + (input - min) % (max - min);
     }
 }

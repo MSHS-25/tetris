@@ -1,4 +1,4 @@
-﻿using UnityEngine;
+using UnityEngine;
 using UnityEngine.Tilemaps;
 
 public enum Tetromino
@@ -20,5 +20,4 @@ public struct TetrominoData
         cells = Data.Cells[tetromino];
         wallKicks = Data.WallKicks[tetromino];
     }
-
 }
