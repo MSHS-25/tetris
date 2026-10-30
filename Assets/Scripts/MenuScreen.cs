@@ -1,28 +1,31 @@
 using UnityEngine;
 using UnityEngine.SceneManagement;
-using UnityEngine.UI;
 
 public class MenuScreen : MonoBehaviour
 {
     public AudioClip mainThemeMusic;
-    public Button quitButton;
 
     private AudioSource audioSource;
 
     private void Awake()
     {
         audioSource = GetComponent<AudioSource>();
-        PlayBackgroundMusic();
 
-        if (quitButton != null)
+        if (audioSource != null && mainThemeMusic != null)
         {
-            quitButton.onClick.AddListener(ExitGame);
+            audioSource.clip = mainThemeMusic;
+            audioSource.loop = true;
+            audioSource.Play();
         }
     }
 
     public void PlayGame()
     {
-        StopBackgroundMusic();
+        if (audioSource != null)
+        {
+            audioSource.Stop();
+        }
+
         SceneManager.LoadSceneAsync("Tetris");
     }
 
@@ -33,23 +36,5 @@ public class MenuScreen : MonoBehaviour
 #else
         Application.Quit();
 #endif
-    }
-
-    private void PlayBackgroundMusic()
-    {
-        if (audioSource != null && mainThemeMusic != null)
-        {
-            audioSource.clip = mainThemeMusic;
-            audioSource.loop = true;
-            audioSource.Play();
-        }
-    }
-
-    private void StopBackgroundMusic()
-    {
-        if (audioSource != null)
-        {
-            audioSource.Stop();
-        }
     }
 }

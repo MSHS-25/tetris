@@ -18,6 +18,6 @@ public struct TetrominoData
     public void Initialize()
     {
         cells = Data.Cells[tetromino];
-        wallKicks = Data.WallKicks[tetromino];
+        wallKicks = Data.GetWallKicks(tetromino);
     }
 }

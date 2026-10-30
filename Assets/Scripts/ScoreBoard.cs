@@ -3,64 +3,27 @@ using TMPro;
 
 public class Scoreboard : MonoBehaviour
 {
-    private const string LastScoreKey = "LastScore";
-
     // Points for clearing 0-4 lines at once
     private static readonly int[] ScorePerLine = { 0, 100, 300, 500, 800 };
 
-    public int score { get; private set; }
-    public int linesCleared { get; private set; }
-    public int piecesPlaced { get; private set; }
-
     public TextMeshProUGUI scoreText;
 
-    private void Start()
-    {
-        UpdateScoreUI();
-    }
+    public int score { get; private set; }
 
-    public void ResetScore()
-    {
-        score = 0;
-        linesCleared = 0;
-        piecesPlaced = 0;
-        UpdateScoreUI();
-    }
+    private void Start() => UpdateScoreUI();
 
-    // Awards points for a line clear of 1-4 lines
-    public void AddLineClear(int lines)
-    {
-        if (lines < 1 || lines >= ScorePerLine.Length)
-        {
-            return;
-        }
+    public void AddLineClear(int lines) => AddPoints(ScorePerLine[Mathf.Clamp(lines, 0, ScorePerLine.Length - 1)]);
 
-        score += ScorePerLine[lines];
-        linesCleared += lines;
-        UpdateScoreUI();
-    }
-
-    // Awards points for cells dropped by the player (1 per soft drop cell, 2 per hard drop cell)
-    public void AddDropPoints(int points)
+    public void AddPoints(int points)
     {
         score += points;
         UpdateScoreUI();
     }
 
-    public void PieceLocked()
+    public void SaveScore()
     {
-        piecesPlaced++;
-    }
-
-    public void SaveScoreOnGameOver()
-    {
-        PlayerPrefs.SetInt(LastScoreKey, score);
+        PlayerPrefs.SetInt("LastScore", score);
         PlayerPrefs.Save();
-    }
-
-    public int GetScore()
-    {
-        return score;
     }
 
     private void UpdateScoreUI()

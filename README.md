@@ -58,6 +58,32 @@ Assets/
   Sprites/, Tiles/   Art
 ```
 
+## How it works
+
+- **Board** owns the `Tilemap`, which is both the drawing surface and the collision grid. The falling piece is written into the tilemap like any locked block. It is removed before it moves and redrawn afterwards, so it never collides with itself.
+- **Piece** reads input every frame but only touches the tilemap on frames where something happens: a key press, a held key repeating, or a gravity step. Idle frames cost almost nothing.
+- **Rotation** follows the Super Rotation System (SRS). Cells rotate 90° with `(x, y) → (y, -x)`. The I and O pieces rotate around an offset center. If the rotated position is blocked, the five wall kick offsets from `Data.cs` are tried in order before the rotation is cancelled.
+- **Line clears** happen in a single pass. The whole board is read with `GetTilesBlock`, full rows are dropped, the remaining rows are shifted down, and the result is written back with one `SetTilesBlock` call.
+- **Locking:** a piece locks when it has gone `lockDelay` seconds without moving. Any successful move or rotation resets that timer.
+
+### Tuning
+
+These values can be changed in the Inspector:
+
+| Component | Field | Default | Meaning |
+| --- | --- | --- | --- |
+| Piece | `stepDelay` | 1 | Seconds between automatic drops (gravity) |
+| Piece | `moveDelay` | 0.1 | Repeat rate when holding a movement key |
+| Piece | `lockDelay` | 0.5 | Time a resting piece waits before locking |
+| Board | `boardSize` | 10 × 20 | Playfield width and height |
+| Board | `spawnPosition` | (-1, 8) | Where new pieces appear |
+
+## Known limitations
+
+- The selected level is saved by the Levels menu, but the game doesn't use it yet, so every level plays the same.
+- The `LevelUpScreen` scene isn't in the build settings, so it can't be reached in a built game.
+- Pieces are picked fully at random, not with the 7-bag system that modern Tetris uses.
+
 ## Troubleshooting
 
 - **"Project has invalid dependencies" or compile errors on first open:** let Unity finish importing, or choose *Reimport All* from the Assets menu.

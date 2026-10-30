@@ -12,7 +12,7 @@ public class LevelUpScreen : MonoBehaviour
     private void Start()
     {
         int currentLevel = PlayerPrefs.GetInt("SelectedLevel", 1);
-        int currentScore = PlayerPrefs.GetInt("CurrentScore", 0);
+        int currentScore = PlayerPrefs.GetInt("LastScore", 0);
 
         levelText.text = $"Level {currentLevel}";
         scoreText.text = $"Score: {currentScore}";

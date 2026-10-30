@@ -5,37 +5,33 @@ public class Piece : MonoBehaviour
     private const int SoftDropPointsPerCell = 1;
     private const int HardDropPointsPerCell = 2;
 
-    public Board board { get; private set; }
-    public TetrominoData data { get; private set; }
-    public Vector3Int[] cells { get; private set; }
-    public Vector3Int position { get; private set; }
-    public int rotationIndex { get; private set; }
-
     public float stepDelay = 1f;
     public float moveDelay = 0.1f;
     public float lockDelay = 0.5f;
     public ParticleSystem landEffect;
 
+    public TetrominoData data { get; private set; }
+    public Vector3Int[] cells { get; private set; }
+    public Vector3Int position { get; private set; }
+
+    private Board board;
+    private int rotationIndex;
     private float stepTime;
     private float moveTime;
     private float lockTime;
 
     public void Initialize(Board board, Vector3Int position, TetrominoData data)
     {
-        this.data = data;
         this.board = board;
         this.position = position;
+        this.data = data;
 
         rotationIndex = 0;
         stepTime = Time.time + stepDelay;
         moveTime = Time.time + moveDelay;
         lockTime = 0f;
 
-        if (cells == null)
-        {
-            cells = new Vector3Int[data.cells.Length];
-        }
-
+        cells ??= new Vector3Int[data.cells.Length];
         for (int i = 0; i < cells.Length; i++)
         {
             cells[i] = (Vector3Int)data.cells[i];
@@ -44,45 +40,47 @@ public class Piece : MonoBehaviour
 
     private void Update()
     {
-        if (board.IsGameOver())
+        if (board.IsGameOver)
+        {
+            return;
+        }
+
+        // The lock timer gives the player time to adjust the piece before it locks
+        lockTime += Time.deltaTime;
+
+        int rotation = Input.GetKeyDown(KeyCode.Q) ? -1 : Input.GetKeyDown(KeyCode.E) ? 1 : 0;
+        bool hardDrop = Input.GetKeyDown(KeyCode.Space);
+        bool move = Time.time > moveTime && (Input.GetKey(KeyCode.A) || Input.GetKey(KeyCode.D) || Input.GetKey(KeyCode.S));
+        bool step = Time.time > stepTime;
+
+        // Most frames nothing happens, so skip redrawing the piece on the tilemap
+        if (rotation == 0 && !hardDrop && !move && !step)
         {
             return;
         }
 
         board.Clear(this);
 
-        // The lock timer gives the player time to adjust the piece before it locks
-        lockTime += Time.deltaTime;
-
-        if (Input.GetKeyDown(KeyCode.Q))
+        if (rotation != 0)
         {
-            Rotate(-1);
-        }
-        else if (Input.GetKeyDown(KeyCode.E))
-        {
-            Rotate(1);
+            Rotate(rotation);
         }
 
-        if (Input.GetKeyDown(KeyCode.Space))
+        if (hardDrop)
         {
             HardDrop();
-            return; // a new piece has spawned; nothing left to do for this one
+            return;
         }
 
-        // Held keys only repeat after the move delay so the piece does not move too fast
-        if (Time.time > moveTime)
+        if (move)
         {
             HandleMoveInputs();
         }
 
-        if (Time.time > stepTime)
+        // Step returns true when the piece locked and a new one has already been placed
+        if (step && Step())
         {
-            Step();
-
-            if (board.IsGameOver())
-            {
-                return;
-            }
+            return;
         }
 
         board.Set(this);
@@ -90,13 +88,11 @@ public class Piece : MonoBehaviour
 
     private void HandleMoveInputs()
     {
-        if (Input.GetKey(KeyCode.S))
+        // Holding a key repeats the move every moveDelay seconds
+        if (Input.GetKey(KeyCode.S) && Move(Vector2Int.down))
         {
-            if (Move(Vector2Int.down))
-            {
-                board.scoreboard?.AddDropPoints(SoftDropPointsPerCell);
-                stepTime = Time.time + stepDelay; // avoid a double move this frame
-            }
+            AddPoints(SoftDropPointsPerCell);
+            stepTime = Time.time + stepDelay; // avoid a double move this frame
         }
 
         if (Input.GetKey(KeyCode.A))
@@ -109,33 +105,34 @@ public class Piece : MonoBehaviour
         }
     }
 
-    private void Step()
+    private bool Step()
     {
         stepTime = Time.time + stepDelay;
-
         Move(Vector2Int.down);
 
         // Once the piece has been inactive for too long it locks
-        if (lockTime >= lockDelay)
+        if (lockTime < lockDelay)
         {
-            Lock();
+            return false;
         }
+
+        Lock();
+        return true;
     }
 
     private void HardDrop()
     {
         int cellsDropped = 0;
-
         while (Move(Vector2Int.down))
         {
             cellsDropped++;
         }
 
-        board.scoreboard?.AddDropPoints(cellsDropped * HardDropPointsPerCell);
+        AddPoints(cellsDropped * HardDropPointsPerCell);
         Lock();
     }
 
-    public void Lock()
+    private void Lock()
     {
         board.PlaySound(board.lockSound);
 
@@ -146,8 +143,15 @@ public class Piece : MonoBehaviour
 
         board.Set(this);
         board.ClearLines();
-        board.scoreboard?.PieceLocked();
         board.SpawnPiece();
+    }
+
+    private void AddPoints(int points)
+    {
+        if (board.scoreboard != null)
+        {
+            board.scoreboard.AddPoints(points);
+        }
     }
 
     private bool Move(Vector2Int translation)
@@ -167,61 +171,46 @@ public class Piece : MonoBehaviour
 
     private void Rotate(int direction)
     {
-        // Remember the rotation so it can be reverted if every wall kick fails
         int originalRotation = rotationIndex;
+        rotationIndex = Mod(rotationIndex + direction, 4);
+        ApplyRotation(direction);
 
-        rotationIndex = Wrap(rotationIndex + direction, 0, 4);
-        ApplyRotationMatrix(direction);
-
-        if (TestWallKicks(rotationIndex, direction))
+        if (TestWallKicks(direction))
         {
             board.PlaySound(board.rotateSound);
         }
         else
         {
             rotationIndex = originalRotation;
-            ApplyRotationMatrix(-direction);
+            ApplyRotation(-direction);
         }
     }
 
-    private void ApplyRotationMatrix(int direction)
+    // Rotates every cell 90 degrees: (x, y) -> (y, -x) clockwise, (-y, x) counter-clockwise
+    private void ApplyRotation(int direction)
     {
-        float[] matrix = Data.RotationMatrix;
+        bool offsetCenter = data.tetromino is Tetromino.I or Tetromino.O;
 
         for (int i = 0; i < cells.Length; i++)
         {
-            Vector3 cell = cells[i];
-            int x, y;
+            Vector3Int cell = cells[i];
 
-            switch (data.tetromino)
-            {
-                case Tetromino.I:
-                case Tetromino.O:
-                    // "I" and "O" rotate around an offset center point
-                    cell.x -= 0.5f;
-                    cell.y -= 0.5f;
-                    x = Mathf.CeilToInt((cell.x * matrix[0] * direction) + (cell.y * matrix[1] * direction));
-                    y = Mathf.CeilToInt((cell.x * matrix[2] * direction) + (cell.y * matrix[3] * direction));
-                    break;
-
-                default:
-                    x = Mathf.RoundToInt((cell.x * matrix[0] * direction) + (cell.y * matrix[1] * direction));
-                    y = Mathf.RoundToInt((cell.x * matrix[2] * direction) + (cell.y * matrix[3] * direction));
-                    break;
-            }
-
-            cells[i] = new Vector3Int(x, y, 0);
+            // "I" and "O" rotate around the corner between four cells instead of a cell's center
+            cells[i] = offsetCenter
+                ? new(Mathf.CeilToInt((cell.y - 0.5f) * direction), Mathf.CeilToInt((0.5f - cell.x) * direction), 0)
+                : new(cell.y * direction, -cell.x * direction, 0);
         }
     }
 
-    // Tries each wall kick offset so a rotation near a wall or stack can still succeed
-    private bool TestWallKicks(int rotationIndex, int rotationDirection)
+    // Tries each wall kick offset so a rotation near a wall or the stack can still succeed
+    private bool TestWallKicks(int direction)
     {
-        int wallKickIndex = GetWallKickIndex(rotationIndex, rotationDirection);
+        Vector2Int[,] kicks = data.wallKicks;
+        int kickIndex = Mod(rotationIndex * 2 - (direction < 0 ? 1 : 0), kicks.GetLength(0));
 
-        for (int i = 0; i < data.wallKicks.GetLength(1); i++)
+        for (int i = 0; i < kicks.GetLength(1); i++)
         {
-            if (Move(data.wallKicks[wallKickIndex, i]))
+            if (Move(kicks[kickIndex, i]))
             {
                 return true;
             }
@@ -230,25 +219,5 @@ public class Piece : MonoBehaviour
         return false;
     }
 
-    private int GetWallKickIndex(int rotationIndex, int rotationDirection)
-    {
-        int wallKickIndex = rotationIndex * 2;
-
-        if (rotationDirection < 0)
-        {
-            wallKickIndex--;
-        }
-
-        return Wrap(wallKickIndex, 0, data.wallKicks.GetLength(0));
-    }
-
-    private int Wrap(int input, int min, int max)
-    {
-        if (input < min)
-        {
-            return max - (min - input) % (max - min);
-        }
-
-        return min + (input - min) % (max - min);
-    }
+    private static int Mod(int value, int length) => (value % length + length) % length;
 }
